@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Tutoring Schedule Management System</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{font-family:Arial;margin:0;background:#f4f6f8}
+header{background:#17365d;color:white;padding:20px;font-size:24px}
+nav{background:#1f4e79;padding:10px}
+nav button{margin:5px;padding:10px;color:white;background:#17365d;border:0;cursor:pointer}
+main{padding:20px}
+.card{background:white;padding:20px;margin-bottom:20px;border-radius:8px}
+input,select{padding:8px;margin:5px}
+button{padding:8px;margin:3px;cursor:pointer}
+table{width:100%;border-collapse:collapse}
+td,th{border:1px solid #ccc;padding:8px}
+.dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px}
+.box{background:#d9eaf7;padding:20px;text-align:center;cursor:pointer;border-radius:8px}
+.hidden{display:none}
+.validation-error{color:red;font-weight:bold;margin:5px}
+.confirm-box{background:#fff3cd;padding:10px;border-radius:5px}
+</style>
+</head>
+
+<body>
+
+<header>📚 Tutoring Schedule Management System</header>
+
+<nav>
+<button onclick="show('dashboard')">Dashboard</button>
+<button onclick="show('students')">Students</button>
+<button onclick="show('tutors')">Tutors</button>
+<button onclick="show('sessions')">Sessions</button>
+<button onclick="show('bookings')">Bookings</button><button onclick="show('apiSettings')">Database/API</button>
+</nav>
+
+<main>
+
+<div id="dashboard" class="card">
+<h2>Dashboard</h2>
+<div class="dashboard">
+<div class="box" onclick="show('students')">Students<br><b id="ds">0</b></div>
+<div class="box" onclick="show('tutors')">Tutors<br><b id="dt">0</b></div>
+<div class="box" onclick="show('sessions')">Sessions<br><b id="dse">0</b></div>
+<div class="box" onclick="show('bookings')">Bookings<br><b id="db">0</b></div>
+</div>
+</div>
+
+
+<div id="students" class="card hidden">
+<h2>Student CRUD</h2>
+<input id="studentName" placeholder="Name">
+<input id="studentEmail" placeholder="Email">
+<input id="studentAge" placeholder="Age">
+<button onclick="addStudent()">Create</button><p id="sm" class="validation-error"></p>
+
+<table>
+<thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Age</th><th>Action</th></tr></thead>
+<tbody id="studentTable"></tbody>
+</table>
+</div>
+
+
+<div id="tutors" class="card hidden">
+<h2>Tutor CRUD</h2>
+<input id="tutorName" placeholder="Name">
+<input id="tutorEmail" placeholder="Email">
+<input id="tutorSubject" placeholder="Subject">
+<button onclick="addTutor()">Create</button><p id="tm" class="validation-error"></p>
+
+<table>
+<thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Subject</th><th>Action</th></tr></thead>
+<tbody id="tutorTable"></tbody>
+</table>
+</div>
+
+
+<div id="sessions" class="card hidden">
+<h2>Session CRUD</h2>
+
+<input id="sessionStudent" placeholder="Student ID or Name" oninput="studentLookup()">
+<span id="studentResult"></span>
+
+<br>
+
+<input id="sessionTutor" placeholder="Tutor ID or Name" oninput="tutorLookup()">
+<span id="tutorResult"></span>
+
+<br>
+
+<input type="date" id="sessionDate">
+<input type="time" id="sessionTime">
+
+<button onclick="addSession()">Create</button><p id="sessionError" class="validation-error"></p>
+
+<table>
+<thead><tr><th>ID</th><th>Student</th><th>Tutor</th><th>Date</th><th>Action</th></tr></thead>
+<tbody id="sessionTable"></tbody>
+</table>
+
+</div>
+
+
+<div id="bookings" class="card hidden">
+
+<h2>Booking CRUD</h2>
+
+<input id="bookingSession" placeholder="Session ID">
+
+<select id="bookingStatus">
+<option>Pending</option>
+<option>Confirmed</option>
+<option>Cancelled</option>
+</select>
+
+<button onclick="addBooking()">Create</button><p id="bookingError" class="validation-error"></p>
+
+<table>
+<thead><tr><th>ID</th><th>Session</th><th>Status</th><th>Action</th></tr></thead>
+<tbody id="bookingTable"></tbody>
+</table>
+
+</div>
+
+
+
+<div id="apiSettings" class="card hidden">
+<h2>Database / API Connection Panel</h2>
+
+<label>API URL</label><br>
+<input id="apiUrl" style="width:80%" 
+placeholder="https://localhost:7001/api">
+
+<br>
+
+<label>Database Type</label><br>
+<select id="dbType">
+<option value="SQLite">Local SQLite</option>
+<option value="Online SQLite">Online SQLite</option>
+<option value="Azure SQL">Azure SQL Database</option>
+</select>
+
+<br>
+
+<button onclick="saveAPI()">Save Configuration</button>
+<button onclick="testAPI()">Test Connection</button>
+<button onclick="clearAPI()">Clear</button>
+
+<p id="apiStatus"></p>
+
+<hr>
+
+<h3>Connection Information</h3>
+
+<table>
+<tr>
+<td>Current API</td>
+<td id="currentAPI">Not configured</td>
+</tr>
+<tr>
+<td>Database</td>
+<td id="currentDB">Not configured</td>
+</tr>
+<tr>
+<td>Status</td>
+<td id="connectionStatus">Disconnected</td>
+</tr>
+</table>
+
+</div>
+
+</main>
+
+
+<script>
+
+let students=JSON.parse(localStorage.students||"[]");
+let tutors=JSON.parse(localStorage.tutors||"[]");
+let sessions=JSON.parse(localStorage.sessions||"[]");
+let bookings=JSON.parse(localStorage.bookings||"[]");
+
+
+function show(id){
+document.querySelectorAll('.card').forEach(x=>x.classList.add('hidden'));
+document.getElementById(id).classList.remove('hidden');
+render();
+}
+
+
+function nextId(prefix,array){
+return prefix+(array.length+1).toString().padStart(3,'0');
+}
+
+
+function addStudent(){
+if(!validateStudentData(studentName.value,studentEmail.value,studentAge.value)) return;
+if(!required([studentName.value,studentEmail.value,studentAge.value],"sm")) return;
+
+let email=studentEmail.value;
+
+if(students.some(x=>x.email==email)){
+alert("Email already exists");
+return;
+}
+
+students.push({
+id:nextId("ST",students),
+name:studentName.value,
+email:email,
+age:studentAge.value
+});
+
+save();
+}
+
+
+function addTutor(){
+if(!validateTutorData(tutorName.value,tutorEmail.value,tutorSubject.value)) return;
+if(!required([tutorName.value,tutorEmail.value,tutorSubject.value],"tm")) return;
+
+if(tutors.some(x=>x.email==tutorEmail.value)){
+alert("Email already exists");
+return;
+}
+
+tutors.push({
+id:nextId("TU",tutors),
+name:tutorName.value,
+email:tutorEmail.value,
+subject:tutorSubject.value
+});
+
+save();
+
+}
+
+
+function studentLookup(){
+
+let v=sessionStudent.value.toLowerCase();
+
+let x=students.find(s=>s.id.toLowerCase()==v || s.name.toLowerCase()==v);
+
+studentResult.innerHTML=x?`ID:${x.id} Name:${x.name}`:"";
+
+}
+
+
+function tutorLookup(){
+
+let v=sessionTutor.value.toLowerCase();
+
+let x=tutors.find(t=>t.id.toLowerCase()==v || t.name.toLowerCase()==v);
+
+tutorResult.innerHTML=x?`ID:${x.id} Name:${x.name}`:"";
+
+}
+
+
+function addSession(){
+if(!required([sessionStudent.value,sessionTutor.value,sessionDate.value,sessionTime.value],"sessionError")) return;
+
+let s=students.find(x=>x.id==sessionStudent.value||x.name==sessionStudent.value);
+
+let t=tutors.find(x=>x.id==sessionTutor.value||x.name==sessionTutor.value);
+
+
+if(!s||!t){
+alert("Student or Tutor not found");
+return;
+}
+
+
+if(sessions.some(x=>x.tutor==t.id && x.date==sessionDate.value && x.time==sessionTime.value)){
+alert("Tutor already booked");
+return;
+}
+
+
+sessions.push({
+id:nextId("SE",sessions),
+student:s.id,
+studentName:s.name,
+tutor:t.id,
+tutorName:t.name,
+date:sessionDate.value,
+time:sessionTime.value
+});
+
+save();
+
+}
+
+
+function addBooking(){
+if(!required([bookingSession.value,bookingStatus.value],"bookingError")) return;
+
+bookings.push({
+id:nextId("BK",bookings),
+session:bookingSession.value,
+status:bookingStatus.value
+});
+
+save();
+
+}
+
+
+
+function remove(type,index){
+
+type.splice(index,1);
+save();
+
+}
+
+
+function save(){
+
+localStorage.students=JSON.stringify(students);
+localStorage.tutors=JSON.stringify(tutors);
+localStorage.sessions=JSON.stringify(sessions);
+localStorage.bookings=JSON.stringify(bookings);
+
+render();
+
+}
+
+
+
+
+function showError(id,message){
+ let e=document.getElementById(id);
+ if(e)e.innerHTML=message;
+}
+
+function required(values,messageId){
+ for(let v of values){
+   if(!v || v.trim()===""){
+     showError(messageId,"Data missing field. Please complete all required fields.");
+     return false;
+   }
+ }
+ showError(messageId,"");
+ return true;
+}
+
+function confirmDelete(){
+ return confirm("Are you sure you want to delete this record?");
+}
+
+function confirmModify(){
+ return confirm("Are you sure you want to modify this record?");
+}
+
+
+
+
+function isValidName(value){
+    return /^[A-Za-z\s]+$/.test(value);
+}
+
+function isValidSubject(value){
+    return /^[A-Za-z\s]+$/.test(value);
+}
+
+function isValidEmail(value){
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function isValidAge(value){
+    return /^[0-9]+$/.test(value) && Number(value)>=1 && Number(value)<=100;
+}
+
+function validateStudentData(name,email,age){
+    if(!name || !email || !age){
+        alert("Data missing field. Please complete all fields.");
+        return false;
+    }
+    if(!isValidName(name)){
+        alert("Name must contain only letters.");
+        return false;
+    }
+    if(!isValidEmail(email)){
+        alert("Please enter a valid email address.");
+        return false;
+    }
+    if(!isValidAge(age)){
+        alert("Age must be a valid number between 1 and 100.");
+        return false;
+    }
+    return true;
+}
+
+function validateTutorData(name,email,subject){
+    if(!name || !email || !subject){
+        alert("Data missing field. Please complete all fields.");
+        return false;
+    }
+    if(!isValidName(name)){
+        alert("Tutor name must contain only letters.");
+        return false;
+    }
+    if(!isValidEmail(email)){
+        alert("Please enter a valid email address.");
+        return false;
+    }
+    if(!isValidSubject(subject)){
+        alert("Subject must contain only letters.");
+        return false;
+    }
+    return true;
+}
+
+function editStudent(index){
+    let x=students[index];
+
+    let name=prompt("Modify Student Name:",x.name);
+    if(name===null) return;
+
+    let email=prompt("Modify Student Email:",x.email);
+    if(email===null) return;
+
+    let age=prompt("Modify Student Age:",x.age);
+    if(age===null) return;
+
+    if(!name.trim() || !email.trim() || !age.trim()){
+        alert("Data missing field. Please complete all fields.");
+        return;
+    }
+
+    if(students.some((s,i)=>i!==index && s.email===email)){
+        alert("Email already exists.");
+        return;
+    }
+
+    if(confirm("Confirm modification of Student "+x.id+"?")){
+        x.name=name;
+        x.email=email;
+        x.age=age;
+        save();
+        alert("Student modified successfully");
+    }
+}
+
+
+function editTutor(index){
+    let x=tutors[index];
+
+    let name=prompt("Modify Tutor Name:",x.name);
+    if(name===null)return;
+
+    let email=prompt("Modify Tutor Email:",x.email);
+    if(email===null)return;
+
+    let subject=prompt("Modify Subject:",x.subject);
+    if(subject===null)return;
+
+    if(!name.trim()||!email.trim()||!subject.trim()){
+        alert("Data missing field. Please complete all fields.");
+        return;
+    }
+
+    if(tutors.some((t,i)=>i!==index && t.email===email)){
+        alert("Email already exists.");
+        return;
+    }
+
+    if(confirm("Confirm modification of Tutor "+x.id+"?")){
+        x.name=name;
+        x.email=email;
+        x.subject=subject;
+        save();
+        alert("Tutor modified successfully");
+    }
+}
+
+
+function editSession(index){
+    let x=sessions[index];
+
+    let date=prompt("Modify Session Date:",x.date);
+    if(date===null)return;
+
+    let time=prompt("Modify Session Time:",x.time);
+    if(time===null)return;
+
+    if(!date.trim()||!time.trim()){
+        alert("Data missing field. Please complete all fields.");
+        return;
+    }
+
+    if(confirm("Confirm modification of Session "+x.id+"?")){
+        x.date=date;
+        x.time=time;
+        save();
+        alert("Session modified successfully");
+    }
+}
+
+
+function editBooking(index){
+    let x=bookings[index];
+
+    let status=prompt("Modify Booking Status:",x.status);
+    if(status===null)return;
+
+    if(!status.trim()){
+        alert("Data missing field.");
+        return;
+    }
+
+    if(confirm("Confirm modification of Booking "+x.id+"?")){
+        x.status=status;
+        save();
+        alert("Booking modified successfully");
+    }
+}
+
+
+function deleteRecord(type,index){
+
+    if(confirm("Are you sure you want to delete this record?")){
+        type.splice(index,1);
+        save();
+        alert("Record deleted successfully");
+    }
+}
+
+function render(){
+
+ds.innerHTML=students.length;
+dt.innerHTML=tutors.length;
+dse.innerHTML=sessions.length;
+db.innerHTML=bookings.length;
+
+
+studentTable.innerHTML=students.map((x,i)=>
+`<tr><td>${x.id}</td><td>${x.name}</td><td>${x.email}</td><td>${x.age}</td>
+<td><button onclick="editStudent(${i})">Modify</button> <button onclick="deleteRecord(students,${i})">Delete</button></td></tr>`).join("");
+
+
+tutorTable.innerHTML=tutors.map((x,i)=>
+`<tr><td>${x.id}</td><td>${x.name}</td><td>${x.email}</td><td>${x.subject}</td>
+<td><button onclick="editTutor(${i})">Modify</button> <button onclick="deleteRecord(tutors,${i})">Delete</button></td></tr>`).join("");
+
+
+sessionTable.innerHTML=sessions.map((x,i)=>
+`<tr><td>${x.id}</td><td>${x.studentName} (${x.student})</td>
+<td>${x.tutorName} (${x.tutor})</td><td>${x.date}</td>
+<td><button onclick="editSession(${i})">Modify</button> <button onclick="deleteRecord(sessions,${i})">Delete</button></td></tr>`).join("");
+
+
+bookingTable.innerHTML=bookings.map((x,i)=>
+`<tr><td>${x.id}</td><td>${x.session}</td><td>${x.status}</td>
+<td><button onclick="editBooking(${i})">Modify</button> <button onclick="deleteRecord(bookings,${i})">Delete</button></td></tr>`).join("");
+
+}
+
+render();
+
+
+
+function saveAPI(){
+
+let config={
+url:document.getElementById("apiUrl").value,
+database:document.getElementById("dbType").value
+};
+
+if(!config.url){
+alert("API URL is required");
+return;
+}
+
+localStorage.apiConfig=JSON.stringify(config);
+
+document.getElementById("apiStatus").innerHTML=
+"Configuration saved successfully";
+
+loadAPI();
+
+}
+
+
+function loadAPI(){
+
+let data=localStorage.apiConfig;
+
+if(data){
+
+let config=JSON.parse(data);
+
+apiUrl.value=config.url;
+dbType.value=config.database;
+
+currentAPI.innerHTML=config.url;
+currentDB.innerHTML=config.database;
+
+}
+
+}
+
+
+async function testAPI(){
+
+let url=document.getElementById("apiUrl").value;
+
+if(!url){
+
+alert("Enter API URL first");
+return;
+
+}
+
+
+try{
+
+let response=await fetch(url);
+
+
+if(response.ok){
+
+connectionStatus.innerHTML="Connected ✓";
+apiStatus.innerHTML="API connection successful";
+
+}
+else{
+
+connectionStatus.innerHTML="Server Error";
+
+}
+
+}
+
+catch(error){
+
+connectionStatus.innerHTML="Connection Failed";
+apiStatus.innerHTML="Cannot connect to API";
+
+}
+
+}
+
+
+function clearAPI(){
+
+localStorage.removeItem("apiConfig");
+
+apiUrl.value="";
+currentAPI.innerHTML="Not configured";
+currentDB.innerHTML="Not configured";
+connectionStatus.innerHTML="Disconnected";
+
+}
+
+
+loadAPI();
+
+
+</script>
+
+</body>
+</html>
